@@ -23,15 +23,24 @@ module Hammer
     desc "build", "builds the binary"
     method_option :build, :type => :string, :default => ".",
       :desc => "path to the build scripts"
+    method_option :multipack, :type => :boolean,
+      :desc => "include buildpacks from the .buildpacks file before building"
     method_option :env, :type => :hash,
       :desc => "build environment to pass to the build script"
     def build
       require 'anvil/engine'
-      slug_url = nil
-      pwd      = Dir.pwd
+      buildpack = "."
+      slug_url  = nil
+      pwd       = Dir.pwd
+
+      if options[:multipack] and not File.exists?(File.join(options[:build], '.buildpacks'))
+        puts "No .buildpacks file exists for use with --multipack. Quiting."
+        return
+      end
 
       Dir.mktmpdir do |dir|
         system("cp -rf #{options[:build]}/* #{dir}")
+        system("cp -rf #{options[:build]}/.buildpacks #{dir}") if options[:multipack]
 
         Dir.chdir(dir) do
           FileUtils.cp_r(File.join(vendor_dir, "bin"), ".")
@@ -45,7 +54,15 @@ module Hammer
             end
           end
 
-          slug_url = Anvil::Engine.build(".", :buildpack => ".", :ignore => ["./builds"])
+          if options[:multipack]
+            File.open(".buildpacks", 'a') do |file|
+              file.write "."
+            end
+
+            buildpack = "https://github.com/keyme/heroku-buildpack-multi.git"
+          end
+
+          slug_url = Anvil::Engine.build(".", :buildpack => buildpack, :ignore => ["./builds"])
         end
       end
 
