@@ -23,6 +23,8 @@ module Hammer
     desc "build", "builds the binary"
     method_option :build, :type => :string, :default => ".",
       :desc => "path to the build scripts"
+    method_option :files, :type => :array,
+      :desc => "list of files from the build directory to include"
     method_option :multipack, :type => :boolean,
       :desc => "include buildpacks from the .buildpacks file before building"
     method_option :env, :type => :hash,
@@ -36,11 +38,14 @@ module Hammer
       if options[:multipack] and not File.exists?(File.join(options[:build], '.buildpacks'))
         puts "No .buildpacks file exists for use with --multipack. Quiting."
         return
+      else
+        options[:files] ||= []
+        options[:files] << ".buildpacks"
       end
 
       Dir.mktmpdir do |dir|
         system("cp -rf #{options[:build]}/* #{dir}")
-        system("cp -rf #{options[:build]}/.buildpacks #{dir}") if options[:multipack]
+        options[:files].each { |file| system("cp #{options[:build]}/#{file} #{dir}") }
 
         Dir.chdir(dir) do
           FileUtils.cp_r(File.join(vendor_dir, "bin"), ".")
@@ -73,7 +78,7 @@ module Hammer
           puts "Removing build cruft"
           system("curl -s -O #{slug_url}")
           system("tar zxf #{filename}")
-          system("rm -rf #{filename} .profile.d .bundle Procfile .gitignore")
+          system("rm -rf #{filename} .profile.d .bundle Procfile .gitignore .git #{options[:files].join(" ")}")
           system("tar czf #{filename} *")
           FileUtils.mkdir_p("#{pwd}/builds")
           system("mv #{filename} #{pwd}/builds")
